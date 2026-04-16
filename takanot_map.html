@@ -495,29 +495,34 @@
         }
 
         async function loadPages() {
-            try {
-                const results = await Promise.all(PAGES.map(p => fetchSections(p.wiki)));
+            const results = await Promise.allSettled(PAGES.map(p => fetchSections(p.wiki)));
 
-                const root = {
-                    name: 'חקיקת תחבורה',
-                    children: [],
-                    symbolSize: 22,
-                    itemStyle: { color: '#e2e8f0' },
-                    label: { fontSize: 18, fontWeight: '800', color: '#e2e8f0' }
-                };
+            const root = {
+                name: 'חקיקת תחבורה',
+                children: [],
+                symbolSize: 22,
+                itemStyle: { color: '#e2e8f0' },
+                label: { fontSize: 18, fontWeight: '800', color: '#e2e8f0' }
+            };
 
-                PAGES.forEach((page, i) => {
-                    root.children.push(buildPageNode(page, results[i]));
-                });
+            PAGES.forEach((page, i) => {
+                if (results[i].status === 'fulfilled') {
+                    root.children.push(buildPageNode(page, results[i].value));
+                } else {
+                    root.children.push({
+                        name: page.display + ' (שגיאת טעינה)',
+                        wikiPage: page.wiki,
+                        anchor: null,
+                        children: [],
+                        symbolSize: 14,
+                        itemStyle: { color: '#ef4444' },
+                        label: { fontWeight: '600', fontSize: 13, color: '#fca5a5' }
+                    });
+                }
+            });
 
-                document.getElementById('empty-state').style.display = 'none';
-                initChart(root);
-            } catch (err) {
-                document.getElementById('empty-state').innerHTML = `
-                    <div style="color:#ef4444;margin-bottom:15px;font-size:3rem;">⚠</div>
-                    <h2 style="font-weight:300;margin:10px 0;">שגיאה בטעינת נתונים</h2>
-                    <p style="opacity:0.7;">${err.message}</p>`;
-            }
+            document.getElementById('empty-state').style.display = 'none';
+            initChart(root);
         }
 
         // =========================================================
