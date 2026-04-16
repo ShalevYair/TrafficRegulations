@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>תקנות התעבורה - מפת ניווט</title>
+    <title>חקיקת תחבורה - מפת ניווט</title>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
     <style>
         :root {
@@ -262,7 +261,7 @@
 <body>
 
     <div class="header">
-        <h1>תקנות התעבורה - מפת ניווט</h1>
+        <h1>חקיקת תחבורה - מפת ניווט</h1>
         <div class="header-controls">
             <div class="zoom-controls">
                 <button class="ctrl-btn" onclick="changeFontSize(1)" title="הגדל טקסט">+</button>
@@ -283,10 +282,10 @@
 
         <div id="info-panel">
             <div id="info-default">
-                <h2 class="panel-title">תקנות התעבורה</h2>
+                <h2 class="panel-title">חקיקת תחבורה</h2>
                 <div class="dynamic-text">
                     <p class="summary-paragraph">
-                        מפה זו מציגה את <strong>מבנה תקנות התעבורה</strong> בצורה היררכית - חלקים, פרקים וסימנים.
+                        מפה זו מציגה את <strong>מבנה חקיקת התחבורה</strong> בצורה היררכית — חוקים, תקנות, חלקים, פרקים וסימנים.
                     </p>
                     <p class="summary-paragraph">
                         לחץ על כל <strong>נוד</strong> (חלק / פרק / סימן) כדי לשלוף ולראות את התוכן המלא שלו מתוך ויקיטקסט.
@@ -311,14 +310,18 @@
         // =========================================================
         // הגדרות
         // =========================================================
-        const CSV_URL = 'takanot_hatavura.csv';         // הקובץ באותה תיקייה
-        const WIKI_PAGE = 'תקנות_התעבורה';
         const WIKI_API = 'https://he.wikisource.org/w/api.php';
         const WIKI_BASE = 'https://he.wikisource.org';
-        const CACHE_KEY = 'wikisource_' + WIKI_PAGE;
+
+        const PAGES = [
+            { wiki: 'תקנות_התעבורה', display: 'תקנות התעבורה' },
+            { wiki: 'חוק_רישוי_שירותים_ומקצועות_בענף_הרכב', display: 'חוק רישוי שירותים ומקצועות בענף הרכב' },
+            { wiki: 'תקנות_רישוי_שירותים_ומקצועות_בענף_הרכב_(ייבוא_רכב_ושיווקו,_תיווך_בייבוא_אישי_ואגרות)', display: 'תקנות רישוי שירותים ומקצועות בענף הרכב' },
+            { wiki: 'תקנות_אוויר_נקי_(זיהום_אוויר_מכלי_רכב)', display: 'תקנות אוויר נקי' }
+        ];
 
         let myChart = null;
-        let wikiDoc = null;  // DOM של העמוד המלא - ישמר בזיכרון
+        let wikiDocs = {};
         let fontScale = 1;
         const BASE_FONT_SIZES = { root: 18, stage: 15, subStage: 14, subSubStage: 13 };
 
@@ -433,91 +436,88 @@
         }
 
         // =========================================================
-        // טעינת ה-CSV ובניית העץ
+        // טעינה דינאמית מויקיטקסט ובניית העץ
         // =========================================================
-        function loadCSV() {
-            fetch(CSV_URL)
-                .then(r => {
-                    if (!r.ok) throw new Error('לא נמצא הקובץ ' + CSV_URL);
-                    return r.text();
-                })
-                .then(csvText => {
-                    Papa.parse(csvText, {
-                        header: true,
-                        skipEmptyLines: true,
-                        complete: (results) => {
-                            const tree = buildTree(results.data);
-                            document.getElementById('empty-state').style.display = 'none';
-                            initChart(tree);
-                        }
-                    });
-                })
-                .catch(err => {
-                    document.getElementById('empty-state').innerHTML = `
-                        <div style="color:#ef4444;margin-bottom:15px;font-size:3rem;">⚠</div>
-                        <h2 style="font-weight:300;margin:10px 0;">שגיאה בטעינת CSV</h2>
-                        <p style="opacity:0.7;">${err.message}</p>
-                        <p style="opacity:0.6;font-size:0.9rem;margin-top:10px;">
-                            ודא שהקובץ <code>${CSV_URL}</code> נמצא באותה תיקייה של ה-HTML
-                        </p>
-                    `;
-                });
+        async function fetchSections(wikiPageName) {
+            const url = `${WIKI_API}?action=parse&page=${encodeURIComponent(wikiPageName)}` +
+                        `&prop=sections&format=json&origin=*`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('שגיאת רשת: ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.info);
+            return data.parse.sections;
         }
 
-        function buildTree(rows) {
-            const root = {
-                name: 'תקנות התעבורה',
+        function buildPageNode(page, sections) {
+            const pageNode = {
+                name: page.display,
+                wikiPage: page.wiki,
+                anchor: null,
                 children: [],
-                anchor: null,  // השורש לא לוחיץ
-                symbolSize: 22,
-                itemStyle: { color: '#e2e8f0' },
-                label: { fontSize: 18, fontWeight: '800', color: '#e2e8f0' }
+                symbolSize: 16,
+                itemStyle: { color: '#2563eb' },
+                label: { fontWeight: '700', fontSize: 15, color: '#93bbfd' }
             };
 
-            let currentHelek = null;
-            let currentPerek = null;
+            const stack = [{ node: pageNode, level: 0 }];
 
-            rows.forEach(row => {
-                const level = (row.Type || '').trim();
-                const title = (row.Description || '').trim();
-                const link = (row.Link || '').trim();
-                const anchor = link.includes('#') ? decodeURIComponent(link.split('#')[1]) : '';
-                if (!level || !title) return;
+            sections.forEach(sec => {
+                const lvl = parseInt(sec.toclevel);
+                const text = sec.line.replace(/<[^>]+>/g, '');
+                const anchor = sec.anchor;
 
-                const node = { name: title, anchor: anchor, children: [] };
+                const node = {
+                    name: text,
+                    anchor: anchor,
+                    wikiPage: page.wiki,
+                    children: []
+                };
 
-                if (level === 'PART') {
-                    node.symbolSize = 16;
-                    node.itemStyle = { color: '#2563eb' };
-                    node.label = { fontWeight: '700', fontSize: 15, color: '#93bbfd' };
-                    root.children.push(node);
-                    currentHelek = node;
-                    currentPerek = null;
-                }
-                else if (level === 'CHAPTER') {
+                if (lvl === 1) {
                     node.symbolSize = 12;
                     node.itemStyle = { color: '#0ea5e9' };
                     node.label = { fontWeight: '500', fontSize: 14, color: '#7dd3fc' };
-                    if (currentHelek) {
-                        currentHelek.children.push(node);
-                        currentPerek = node;
-                    } else {
-                        root.children.push(node);
-                    }
-                }
-                else if (level === 'SIGN') {
+                } else {
                     node.symbolSize = 8;
                     node.itemStyle = { color: '#94a3b8' };
                     node.label = { fontSize: 13, color: '#94a3b8' };
-                    if (currentPerek) {
-                        currentPerek.children.push(node);
-                    } else if (currentHelek) {
-                        currentHelek.children.push(node);
-                    }
                 }
+
+                while (stack.length > 1 && stack[stack.length - 1].level >= lvl) {
+                    stack.pop();
+                }
+
+                stack[stack.length - 1].node.children.push(node);
+                stack.push({ node: node, level: lvl });
             });
 
-            return root;
+            return pageNode;
+        }
+
+        async function loadPages() {
+            try {
+                const results = await Promise.all(PAGES.map(p => fetchSections(p.wiki)));
+
+                const root = {
+                    name: 'חקיקת תחבורה',
+                    children: [],
+                    symbolSize: 22,
+                    itemStyle: { color: '#e2e8f0' },
+                    label: { fontSize: 18, fontWeight: '800', color: '#e2e8f0' }
+                };
+
+                PAGES.forEach((page, i) => {
+                    root.children.push(buildPageNode(page, results[i]));
+                });
+
+                document.getElementById('empty-state').style.display = 'none';
+                initChart(root);
+            } catch (err) {
+                document.getElementById('empty-state').innerHTML = `
+                    <div style="color:#ef4444;margin-bottom:15px;font-size:3rem;">⚠</div>
+                    <h2 style="font-weight:300;margin:10px 0;">שגיאה בטעינת נתונים</h2>
+                    <p style="opacity:0.7;">${err.message}</p>`;
+            }
         }
 
         // =========================================================
@@ -557,8 +557,8 @@
 
             myChart.on('click', (params) => {
                 const d = params.data;
-                if (d && d.anchor) {
-                    showSection(d.name, d.anchor);
+                if (d && d.anchor && d.wikiPage) {
+                    showSection(d.name, d.anchor, d.wikiPage);
                 }
             });
 
@@ -568,7 +568,7 @@
         // =========================================================
         // שליפת סעיף מויקיטקסט
         // =========================================================
-        async function showSection(title, anchor) {
+        async function showSection(title, anchor, wikiPage) {
             document.getElementById('info-default').style.display = 'none';
             document.getElementById('info-content-view').style.display = 'block';
 
@@ -577,27 +577,27 @@
                 '<p><span class="loader"></span> שולף מויקיטקסט...</p>';
 
             const srcLink = document.getElementById('source-a');
-            srcLink.href = WIKI_BASE + '/wiki/' + encodeURIComponent(WIKI_PAGE) + '#' + anchor;
+            srcLink.href = WIKI_BASE + '/wiki/' + encodeURIComponent(wikiPage) + '#' + anchor;
 
             try {
-                // טעינת העמוד המלא אם עוד לא נטען
-                if (!wikiDoc) {
-                    let html = sessionStorage.getItem(CACHE_KEY);
+                if (!wikiDocs[wikiPage]) {
+                    const cacheKey = 'wikisource_' + wikiPage;
+                    let html = sessionStorage.getItem(cacheKey);
                     if (!html) {
                         const res = await fetch(
-                            `${WIKI_API}?action=parse&page=${encodeURIComponent(WIKI_PAGE)}` +
+                            `${WIKI_API}?action=parse&page=${encodeURIComponent(wikiPage)}` +
                             `&prop=text&format=json&origin=*`
                         );
                         const data = await res.json();
                         if (data.error) throw new Error(data.error.info);
                         html = data.parse.text['*'];
-                        try { sessionStorage.setItem(CACHE_KEY, html); } catch(e) {}
+                        try { sessionStorage.setItem(cacheKey, html); } catch(e) {}
                     }
-                    wikiDoc = new DOMParser().parseFromString(html, 'text/html');
+                    wikiDocs[wikiPage] = new DOMParser().parseFromString(html, 'text/html');
                 }
 
-                // איתור העוגן
-                const startEl = wikiDoc.querySelector(`#${CSS.escape(anchor)}`);
+                const doc = wikiDocs[wikiPage];
+                const startEl = doc.querySelector(`#${CSS.escape(anchor)}`);
                 if (!startEl) throw new Error('לא נמצא עוגן: ' + anchor);
 
                 const startHeading = startEl.closest('h1,h2,h3,h4,h5,h6');
@@ -616,7 +616,6 @@
                     node = node.nextElementSibling;
                 }
 
-                // הרכבה + תיקון קישורים
                 const wrapper = document.createElement('div');
                 chunks.forEach(n => wrapper.appendChild(n));
                 wrapper.querySelectorAll('a[href^="/wiki/"]').forEach(a => {
@@ -624,7 +623,7 @@
                     a.target = '_blank';
                 });
                 wrapper.querySelectorAll('a[href^="#"]').forEach(a => {
-                    a.href = WIKI_BASE + '/wiki/' + encodeURIComponent(WIKI_PAGE) + a.getAttribute('href');
+                    a.href = WIKI_BASE + '/wiki/' + encodeURIComponent(wikiPage) + a.getAttribute('href');
                     a.target = '_blank';
                 });
 
@@ -642,7 +641,7 @@
         // =========================================================
         // התחלה
         // =========================================================
-        document.addEventListener('DOMContentLoaded', loadCSV);
+        document.addEventListener('DOMContentLoaded', loadPages);
     </script>
 </body>
 </html>
