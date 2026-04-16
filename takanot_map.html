@@ -478,14 +478,15 @@
             let currentPerek = null;
 
             rows.forEach(row => {
-                const level = (row.Level || '').trim();
-                const title = (row.Title || '').trim();
-                const anchor = (row.Anchor || '').trim();
+                const level = (row.Type || '').trim();
+                const title = (row.Description || '').trim();
+                const link = (row.Link || '').trim();
+                const anchor = link.includes('#') ? decodeURIComponent(link.split('#')[1]) : '';
                 if (!level || !title) return;
 
                 const node = { name: title, anchor: anchor, children: [] };
 
-                if (level === 'Helek') {
+                if (level === 'PART') {
                     node.symbolSize = 16;
                     node.itemStyle = { color: '#2563eb' };
                     node.label = { fontWeight: '700', fontSize: 15, color: '#93bbfd' };
@@ -493,7 +494,7 @@
                     currentHelek = node;
                     currentPerek = null;
                 }
-                else if (level === 'Perek') {
+                else if (level === 'CHAPTER') {
                     node.symbolSize = 12;
                     node.itemStyle = { color: '#0ea5e9' };
                     node.label = { fontWeight: '500', fontSize: 14, color: '#7dd3fc' };
@@ -504,7 +505,7 @@
                         root.children.push(node);
                     }
                 }
-                else if (level === 'Siman') {
+                else if (level === 'SIGN') {
                     node.symbolSize = 8;
                     node.itemStyle = { color: '#94a3b8' };
                     node.label = { fontSize: 13, color: '#94a3b8' };
