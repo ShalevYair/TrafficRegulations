@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>תקנות התעבורה - מפת ניווט</title>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <style>
+        :root {
+            --primary: #60a5fa;
+            --primary-dark: #93bbfd;
+            --secondary: #38bdf8;
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #e2e8f0;
+            --text-sub: #94a3b8;
+            --border-light: #334155;
+            --header-bg: rgba(30, 41, 59, 0.95);
+            --node-bg: #1e293b;
+            --node-shadow: rgba(0,0,0,0.3);
+            --line-color: #475569;
+            --base-font-size: 16px;
+        }
+
+        body.light-mode {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0ea5e9;
+            --bg-color: #f8fafc;
+            --panel-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-sub: #475569;
+            --border-light: #e2e8f0;
+            --header-bg: rgba(255, 255, 255, 0.9);
+            --node-bg: #fff;
+            --node-shadow: rgba(0,0,0,0.08);
+            --line-color: #cbd5e1;
+        }
+
+        body {
+            font-family: 'Heebo', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+
+        .header {
+            padding: 15px 40px;
+            background: var(--header-bg);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-light);
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.6rem;
+            color: var(--primary);
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .main-wrapper {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 75px);
+            padding: 20px;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+
+        #chart-area {
+            flex: 3;
+            background-color: var(--panel-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+            overflow: hidden;
+            position: relative;
+            border: 1px solid var(--border-light);
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        #info-panel {
+            flex: 1;
+            min-width: 320px;
+            max-width: 480px;
+            background-color: var(--panel-bg);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border-light);
+            position: relative;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .zoom-controls {
+            display: flex;
+            gap: 5px;
+            background: var(--panel-bg);
+            padding: 4px;
+            border-radius: 50px;
+            border: 1px solid var(--border-light);
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        .ctrl-btn {
+            background: var(--bg-color);
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .ctrl-btn:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .dark-mode-btn {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-light);
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.1rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .dark-mode-btn:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .panel-title {
+            margin: 0 0 20px 0;
+            font-size: calc(var(--base-font-size) + 6px);
+            color: var(--primary-dark);
+            font-weight: 800;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border-light);
+        }
+
+        .info-section {
+            margin-bottom: 25px;
+        }
+
+        .info-label {
+            font-weight: 700;
+            color: var(--secondary);
+            font-size: calc(var(--base-font-size) - 2px);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .dynamic-text {
+            font-size: var(--base-font-size);
+            line-height: 1.8;
+            color: var(--text-sub);
+            transition: font-size 0.3s ease;
+        }
+
+        /* תוכן מויקיטקסט */
+        .wiki-content {
+            font-size: var(--base-font-size);
+            line-height: 1.8;
+            color: var(--text-main);
+        }
+        .wiki-content p { margin: 0 0 12px 0; }
+        .wiki-content h2, .wiki-content h3, .wiki-content h4, .wiki-content h5 {
+            color: var(--primary-dark);
+            margin: 20px 0 10px 0;
+        }
+        .wiki-content a {
+            color: var(--secondary);
+            text-decoration: none;
+        }
+        .wiki-content a:hover { text-decoration: underline; }
+        .wiki-content .mw-editsection,
+        .wiki-content .noprint,
+        .wiki-content .mw-headline-anchor { display: none; }
+
+        #empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--text-sub);
+            width: 80%;
+        }
+
+        #info-panel::-webkit-scrollbar { width: 6px; }
+        #info-panel::-webkit-scrollbar-track { background: transparent; }
+        #info-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #info-panel::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .summary-paragraph {
+            margin-bottom: 16px;
+            text-align: justify;
+        }
+
+        .loader {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border-light);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .source-link {
+            font-size: calc(var(--base-font-size) - 3px);
+            color: var(--text-sub);
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-light);
+        }
+        .source-link a { color: var(--secondary); text-decoration: none; }
+        .source-link a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>תקנות התעבורה - מפת ניווט</h1>
+        <div class="header-controls">
+            <div class="zoom-controls">
+                <button class="ctrl-btn" onclick="changeFontSize(1)" title="הגדל טקסט">+</button>
+                <button class="ctrl-btn" onclick="changeFontSize(-1)" title="הקטן טקסט">-</button>
+            </div>
+            <button class="dark-mode-btn" onclick="toggleDarkMode()" id="dark-mode-btn" title="מצב בהיר/כהה">&#9788;</button>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <div id="chart-area">
+            <div id="empty-state">
+                <div style="color: #94a3b8; margin-bottom: 15px; font-size: 3rem;">⏳</div>
+                <h2 style="font-weight: 300; margin: 10px 0;">טוען מבנה התקנות...</h2>
+                <p style="font-size: 1.1rem; opacity: 0.7;">אנא המתן</p>
+            </div>
+        </div>
+
+        <div id="info-panel">
+            <div id="info-default">
+                <h2 class="panel-title">תקנות התעבורה</h2>
+                <div class="dynamic-text">
+                    <p class="summary-paragraph">
+                        מפה זו מציגה את <strong>מבנה תקנות התעבורה</strong> בצורה היררכית - חלקים, פרקים וסימנים.
+                    </p>
+                    <p class="summary-paragraph">
+                        לחץ על כל <strong>נוד</strong> (חלק / פרק / סימן) כדי לשלוף ולראות את התוכן המלא שלו מתוך ויקיטקסט.
+                    </p>
+                    <p class="summary-paragraph" style="color: var(--primary); font-weight: 500; margin-top: 25px; text-align: center;">
+                        👆 בחר פריט מהמפה כדי לצפות בתוכן המלא של הסעיף
+                    </p>
+                </div>
+            </div>
+
+            <div id="info-content-view" style="display: none;">
+                <h2 id="info-title" class="panel-title">שם הסעיף</h2>
+                <div id="info-body" class="wiki-content"></div>
+                <div class="source-link">
+                    מקור: <a id="source-a" href="#" target="_blank">ויקיטקסט</a> • רישיון CC BY-SA
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================
+        // הגדרות
+        // =========================================================
+        const CSV_URL = 'takanot_hatavura.csv';         // הקובץ באותה תיקייה
+        const WIKI_PAGE = 'תקנות_התעבורה';
+        const WIKI_API = 'https://he.wikisource.org/w/api.php';
+        const WIKI_BASE = 'https://he.wikisource.org';
+        const CACHE_KEY = 'wikisource_' + WIKI_PAGE;
+
+        let myChart = null;
+        let wikiDoc = null;  // DOM של העמוד המלא - ישמר בזיכרון
+        let fontScale = 1;
+        const BASE_FONT_SIZES = { root: 18, stage: 15, subStage: 14, subSubStage: 13 };
+
+        // =========================================================
+        // זום וטוגל דארק מוד - ללא שינוי מהגרסה הקודמת
+        // =========================================================
+        function changeFontSize(step) {
+            const root = document.documentElement;
+            let currentSize = parseInt(getComputedStyle(root).getPropertyValue('--base-font-size'));
+            let newSize = currentSize + (step * 2);
+            if (newSize >= 14 && newSize <= 28) {
+                root.style.setProperty('--base-font-size', newSize + 'px');
+                fontScale = newSize / 16;
+                updateChartFontSizes();
+            }
+        }
+
+        function updateChartFontSizes() {
+            if (!myChart) return;
+            const option = myChart.getOption();
+            if (!option || !option.series || !option.series[0]) return;
+
+            function updateNodeFonts(node) {
+                if (!node) return;
+                if (node.label) {
+                    if (node.label.fontWeight === '800') {
+                        node.label.fontSize = Math.round(BASE_FONT_SIZES.root * fontScale);
+                    } else if (node.label.fontWeight === '700') {
+                        node.label.fontSize = Math.round(BASE_FONT_SIZES.stage * fontScale);
+                    } else if (node.label.fontWeight === '500') {
+                        node.label.fontSize = Math.round(BASE_FONT_SIZES.subStage * fontScale);
+                    } else {
+                        node.label.fontSize = Math.round(BASE_FONT_SIZES.subSubStage * fontScale);
+                    }
+                }
+                if (node.children) node.children.forEach(updateNodeFonts);
+            }
+
+            const seriesData = option.series[0].data;
+            if (seriesData && seriesData[0]) {
+                updateNodeFonts(seriesData[0]);
+                myChart.setOption({ series: [{ data: seriesData }] });
+            }
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            document.getElementById('dark-mode-btn').innerHTML = isLight ? '&#9790;' : '&#9788;';
+            updateChartTheme();
+        }
+
+        function updateChartTheme() {
+            if (!myChart) return;
+            const isLight = document.body.classList.contains('light-mode');
+            const nodeBg = isLight ? '#fff' : '#1e293b';
+            const nodeShadow = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.3)';
+            const lineColor = isLight ? '#cbd5e1' : '#475569';
+            const tooltipBg = isLight ? 'rgba(255,255,255,0.95)' : 'rgba(30,41,59,0.95)';
+            const tooltipText = isLight ? '#0f172a' : '#e2e8f0';
+            const tooltipBorder = isLight ? '#e2e8f0' : '#475569';
+
+            myChart.setOption({
+                tooltip: {
+                    backgroundColor: tooltipBg,
+                    textStyle: { color: tooltipText },
+                    borderColor: tooltipBorder
+                },
+                series: [{
+                    label: { backgroundColor: nodeBg, shadowColor: nodeShadow },
+                    lineStyle: { color: lineColor }
+                }]
+            });
+
+            const option = myChart.getOption();
+            const seriesData = option.series[0].data;
+            if (seriesData && seriesData[0]) {
+                updateNodeColors(seriesData[0], isLight);
+                myChart.setOption({ series: [{ data: seriesData }] });
+            }
+        }
+
+        const COLOR_MAP = {
+            label: {
+                '#e2e8f0': '#0f172a',
+                '#93bbfd': '#1d4ed8',
+                '#7dd3fc': '#0369a1',
+                '#94a3b8': '#475569'
+            },
+            itemStyle: { '#e2e8f0': '#0f172a' }
+        };
+
+        function updateNodeColors(node, isLight) {
+            if (!node) return;
+            if (node.label && node.label.color) {
+                for (const [dark, light] of Object.entries(COLOR_MAP.label)) {
+                    if (node.label.color === dark || node.label.color === light) {
+                        node.label.color = isLight ? light : dark;
+                        break;
+                    }
+                }
+            }
+            if (node.itemStyle) {
+                for (const [dark, light] of Object.entries(COLOR_MAP.itemStyle)) {
+                    if (node.itemStyle.color === dark || node.itemStyle.color === light) {
+                        node.itemStyle.color = isLight ? light : dark;
+                        break;
+                    }
+                }
+            }
+            if (node.children) node.children.forEach(c => updateNodeColors(c, isLight));
+        }
+
+        // =========================================================
+        // טעינת ה-CSV ובניית העץ
+        // =========================================================
+        function loadCSV() {
+            fetch(CSV_URL)
+                .then(r => {
+                    if (!r.ok) throw new Error('לא נמצא הקובץ ' + CSV_URL);
+                    return r.text();
+                })
+                .then(csvText => {
+                    Papa.parse(csvText, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            const tree = buildTree(results.data);
+                            document.getElementById('empty-state').style.display = 'none';
+                            initChart(tree);
+                        }
+                    });
+                })
+                .catch(err => {
+                    document.getElementById('empty-state').innerHTML = `
+                        <div style="color:#ef4444;margin-bottom:15px;font-size:3rem;">⚠</div>
+                        <h2 style="font-weight:300;margin:10px 0;">שגיאה בטעינת CSV</h2>
+                        <p style="opacity:0.7;">${err.message}</p>
+                        <p style="opacity:0.6;font-size:0.9rem;margin-top:10px;">
+                            ודא שהקובץ <code>${CSV_URL}</code> נמצא באותה תיקייה של ה-HTML
+                        </p>
+                    `;
+                });
+        }
+
+        function buildTree(rows) {
+            const root = {
+                name: 'תקנות התעבורה',
+                children: [],
+                anchor: null,  // השורש לא לוחיץ
+                symbolSize: 22,
+                itemStyle: { color: '#e2e8f0' },
+                label: { fontSize: 18, fontWeight: '800', color: '#e2e8f0' }
+            };
+
+            let currentHelek = null;
+            let currentPerek = null;
+
+            rows.forEach(row => {
+                const level = (row.Level || '').trim();
+                const title = (row.Title || '').trim();
+                const anchor = (row.Anchor || '').trim();
+                if (!level || !title) return;
+
+                const node = { name: title, anchor: anchor, children: [] };
+
+                if (level === 'Helek') {
+                    node.symbolSize = 16;
+                    node.itemStyle = { color: '#2563eb' };
+                    node.label = { fontWeight: '700', fontSize: 15, color: '#93bbfd' };
+                    root.children.push(node);
+                    currentHelek = node;
+                    currentPerek = null;
+                }
+                else if (level === 'Perek') {
+                    node.symbolSize = 12;
+                    node.itemStyle = { color: '#0ea5e9' };
+                    node.label = { fontWeight: '500', fontSize: 14, color: '#7dd3fc' };
+                    if (currentHelek) {
+                        currentHelek.children.push(node);
+                        currentPerek = node;
+                    } else {
+                        root.children.push(node);
+                    }
+                }
+                else if (level === 'Siman') {
+                    node.symbolSize = 8;
+                    node.itemStyle = { color: '#94a3b8' };
+                    node.label = { fontSize: 13, color: '#94a3b8' };
+                    if (currentPerek) {
+                        currentPerek.children.push(node);
+                    } else if (currentHelek) {
+                        currentHelek.children.push(node);
+                    }
+                }
+            });
+
+            return root;
+        }
+
+        // =========================================================
+        // תצוגת מפת המחשבה (echarts tree)
+        // =========================================================
+        function initChart(data) {
+            const chartDom = document.getElementById('chart-area');
+            if (myChart) myChart.dispose();
+            myChart = echarts.init(chartDom);
+
+            const option = {
+                tooltip: {
+                    trigger: 'item', triggerOn: 'mousemove', formatter: '{b}',
+                    backgroundColor: 'rgba(30,41,59,0.95)',
+                    textStyle: { color: '#e2e8f0', fontFamily: 'Heebo' },
+                    borderColor: '#475569', borderWidth: 1, padding: [8, 12]
+                },
+                series: [{
+                    type: 'tree', data: [data], orient: 'RL',
+                    top: '5%', left: '20%', bottom: '5%', right: '15%',
+                    roam: true,
+                    label: {
+                        position: 'left', verticalAlign: 'middle', align: 'right',
+                        fontFamily: 'Heebo', padding: [5, 10],
+                        backgroundColor: '#1e293b', borderRadius: 6,
+                        shadowColor: 'rgba(0,0,0,0.3)', shadowBlur: 5, shadowOffsetY: 2
+                    },
+                    leaves: {
+                        label: { position: 'right', verticalAlign: 'middle', align: 'left' }
+                    },
+                    lineStyle: { color: '#475569', width: 2, curveness: 0.6 },
+                    expandAndCollapse: true, animationDuration: 550, initialTreeDepth: 1
+                }]
+            };
+
+            myChart.setOption(option);
+
+            myChart.on('click', (params) => {
+                const d = params.data;
+                if (d && d.anchor) {
+                    showSection(d.name, d.anchor);
+                }
+            });
+
+            window.addEventListener('resize', () => myChart.resize());
+        }
+
+        // =========================================================
+        // שליפת סעיף מויקיטקסט
+        // =========================================================
+        async function showSection(title, anchor) {
+            document.getElementById('info-default').style.display = 'none';
+            document.getElementById('info-content-view').style.display = 'block';
+
+            document.getElementById('info-title').textContent = title;
+            document.getElementById('info-body').innerHTML =
+                '<p><span class="loader"></span> שולף מויקיטקסט...</p>';
+
+            const srcLink = document.getElementById('source-a');
+            srcLink.href = WIKI_BASE + '/wiki/' + encodeURIComponent(WIKI_PAGE) + '#' + anchor;
+
+            try {
+                // טעינת העמוד המלא אם עוד לא נטען
+                if (!wikiDoc) {
+                    let html = sessionStorage.getItem(CACHE_KEY);
+                    if (!html) {
+                        const res = await fetch(
+                            `${WIKI_API}?action=parse&page=${encodeURIComponent(WIKI_PAGE)}` +
+                            `&prop=text&format=json&origin=*`
+                        );
+                        const data = await res.json();
+                        if (data.error) throw new Error(data.error.info);
+                        html = data.parse.text['*'];
+                        try { sessionStorage.setItem(CACHE_KEY, html); } catch(e) {}
+                    }
+                    wikiDoc = new DOMParser().parseFromString(html, 'text/html');
+                }
+
+                // איתור העוגן
+                const startEl = wikiDoc.querySelector(`#${CSS.escape(anchor)}`);
+                if (!startEl) throw new Error('לא נמצא עוגן: ' + anchor);
+
+                const startHeading = startEl.closest('h1,h2,h3,h4,h5,h6');
+                if (!startHeading) throw new Error('העוגן אינו בתוך כותרת');
+
+                const startLevel = parseInt(startHeading.tagName.substring(1));
+                const chunks = [startHeading.cloneNode(true)];
+
+                let node = startHeading.nextElementSibling;
+                while (node) {
+                    if (/^H[1-6]$/.test(node.tagName)) {
+                        const lvl = parseInt(node.tagName.substring(1));
+                        if (lvl <= startLevel) break;
+                    }
+                    chunks.push(node.cloneNode(true));
+                    node = node.nextElementSibling;
+                }
+
+                // הרכבה + תיקון קישורים
+                const wrapper = document.createElement('div');
+                chunks.forEach(n => wrapper.appendChild(n));
+                wrapper.querySelectorAll('a[href^="/wiki/"]').forEach(a => {
+                    a.href = WIKI_BASE + a.getAttribute('href');
+                    a.target = '_blank';
+                });
+                wrapper.querySelectorAll('a[href^="#"]').forEach(a => {
+                    a.href = WIKI_BASE + '/wiki/' + encodeURIComponent(WIKI_PAGE) + a.getAttribute('href');
+                    a.target = '_blank';
+                });
+
+                document.getElementById('info-body').innerHTML = wrapper.innerHTML;
+
+            } catch (err) {
+                document.getElementById('info-body').innerHTML =
+                    `<p style="color:#ef4444">שגיאה: ${err.message}</p>
+                     <p style="font-size:0.9em;opacity:0.7">
+                        אפשר לנסות לצפות ישירות ב<a href="${srcLink.href}" target="_blank">ויקיטקסט</a>
+                     </p>`;
+            }
+        }
+
+        // =========================================================
+        // התחלה
+        // =========================================================
+        document.addEventListener('DOMContentLoaded', loadCSV);
+    </script>
+</body>
+</html>
