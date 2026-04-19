@@ -543,7 +543,18 @@
                         position: 'left', verticalAlign: 'middle', align: 'right',
                         fontFamily: 'Heebo', padding: [5, 10],
                         backgroundColor: '#1e293b', borderRadius: 6,
-                        shadowColor: 'rgba(0,0,0,0.3)', shadowBlur: 5, shadowOffsetY: 2
+                        shadowColor: 'rgba(0,0,0,0.3)', shadowBlur: 5, shadowOffsetY: 2,
+                        formatter: function(params) {
+                            const name = params.name;
+                            const hasChildren = params.data && params.data.children && params.data.children.length > 0;
+                            if (hasChildren) {
+                                const words = name.split(/\s+/);
+                                if (words.length > 3) {
+                                    return words.slice(0, 3).join(' ') + '...';
+                                }
+                            }
+                            return name;
+                        }
                     },
                     leaves: {
                         label: { position: 'right', verticalAlign: 'middle', align: 'left' }
